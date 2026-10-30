@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "CreatorKit Studio",
+  "short_name": "CreatorKit",
+  "description": "The all-in-one creator workspace for video editing, AI scriptwriting, thumbnail design, subtitles, and multi-platform publishing.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "categories": ["productivity", "video", "multimedia", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/src/assets/images/creator_avatar_1792855091065.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/src/assets/images/creator_avatar_1792855091065.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

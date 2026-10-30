@@ -1,0 +1,6 @@
+{
+  "name": "CreatorKit Studio",
+  "description": "The all-in-one creator workspace for video editing, AI scriptwriting, thumbnail design, subtitles, and multi-platform publishing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
