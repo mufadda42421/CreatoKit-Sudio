@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Shield,
   Zap,
+  Key,
 } from 'lucide-react';
 
 interface NicheFinderViewProps {
@@ -41,69 +42,9 @@ export const NicheFinderView: React.FC<NicheFinderViewProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [copiedHook, setCopiedHook] = useState<string | null>(null);
 
-  // Curated baseline niches that load if no scan has been run yet
-  const [niches, setNiches] = useState<NicheResult[]>([
-    {
-      id: 'niche_1',
-      title: 'AI Productivity Tool Architecture for Solo Creators',
-      tagline: 'Practical automation workflows replacing 20 hours of manual video production',
-      category: 'Tech & AI',
-      competition: 'Low',
-      rpmEstimate: '$24 - $42 RPM',
-      growthScore: 94,
-      targetAudience: 'Solo content creators, freelance video editors, remote knowledge workers (Ages 22-40)',
-      contentFormats: ['10-Min YouTube Breakdowns', '60-Sec Step-by-Step Reels', 'X Visual Threads'],
-      topVideoHooks: [
-        '90% of video editors are wasting 15 hours a week doing this one manual step. Here is the AI fix.',
-        'I automated my entire YouTube clipping and subtitle workflow with 2 tools.',
-        'Stop paying $50/mo for bloated software when these 3 open-source models do it better.',
-        'The exact AI stack that helped me publish 4x faster without burning out.',
-        'If you still edit B-roll manually in 2026, watch this 60-second shortcut.',
-      ],
-      monetizationMethods: ['Sponsorships ($1,500 - $5,000 / video)', 'Digital Workflow Templates', 'Affiliate Partnerships'],
-      whyItWorks: 'High viewer commercial intent and willingness to purchase software subscriptions result in premier advertiser bids.',
-    },
-    {
-      id: 'niche_2',
-      title: 'Micro-Habits & Cognitive Longevity for High Performers',
-      tagline: 'Science-backed daily protocols for focus, deep sleep, and sustained mental energy',
-      category: 'Health & Science',
-      competition: 'Low',
-      rpmEstimate: '$18 - $36 RPM',
-      growthScore: 91,
-      targetAudience: 'Software engineers, founders, and ambitious professionals seeking peak cognitive stamina (Ages 25-45)',
-      contentFormats: ['High-Energy Visual Shorts', 'Podcast Deep-Dives', 'Illustrated Whiteboard Explainers'],
-      topVideoHooks: [
-        'The 10-minute morning protocol neuroscientists use to double afternoon focus.',
-        'Why drinking coffee in your first 90 minutes of waking ruins your cortisol curve.',
-        '3 micro-habits that completely fixed my 3 PM brain fog.',
-        'The non-negotiable sleep stack tested across 500 clinical sleep studies.',
-        'Stop doing 2-hour workout routines. This 15-minute protocol builds more stamina.',
-      ],
-      monetizationMethods: ['Supplements & Nootropics Brand Deals', 'High-Ticket Coaching / Communities', 'Health Tracker Affiliates'],
-      whyItWorks: 'High retention driven by evergreen health curiosity and premium wellness advertisers.',
-    },
-    {
-      id: 'niche_3',
-      title: 'Zero-Capital Digital Asset Flipping & Newsletters',
-      tagline: 'Documenting the rise of micro-media empires built with automated curation',
-      category: 'Business & Finance',
-      competition: 'Medium',
-      rpmEstimate: '$28 - $55 RPM',
-      growthScore: 88,
-      targetAudience: 'Aspiring digital entrepreneurs and side-hustlers looking for sustainable online businesses',
-      contentFormats: ['Case Study Documentaries', 'Weekly Growth Breakdowns', 'Live Audit Shorts'],
-      topVideoHooks: [
-        'How a 21-year-old built a $14,000/month newsletter working 4 hours on Sundays.',
-        'The exact blueprint to acquire your first 5,000 subscribers without spending a dollar on ads.',
-        'Don’t build a SaaS in 2026. Build this micro-asset instead.',
-        'I audited the top 10 creator businesses. Here is where 80% of their actual revenue comes from.',
-        '3 digital business models that require zero inventory and zero staff.',
-      ],
-      monetizationMethods: ['Premium Newsletter Sponsorships', 'AdSense RPM at highest finance tiers', 'Course & Mastermind Sales'],
-      whyItWorks: 'Finance and business topics command the highest advertiser CPMs in digital media.',
-    },
-  ]);
+  // Clean empty state with no pre-baked demo info
+  const [niches, setNiches] = useState<NicheResult[]>([]);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const defaultProvider = providers.find((p) => p.isDefault) || providers[0];
 
@@ -113,12 +54,7 @@ export const NicheFinderView: React.FC<NicheFinderViewProps> = ({
       return;
     }
 
-    // Check API Key
-    if (!defaultProvider?.apiKey) {
-      onRequestApiKey();
-      return;
-    }
-
+    setScanError(null);
     setIsScanning(true);
     try {
       const prompt = `Analyze current digital content trends on ${selectedPlatform} and return 3 high-potential, underserved creator niches.
@@ -132,7 +68,7 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
     "id": "niche_generated_1",
     "title": "Niche Title",
     "tagline": "One clear sentence describing value",
-    "category": "${selectedCategory === 'all' ? 'Tech & Business' : selectedCategory}",
+    "category": "${selectedCategory === 'all' ? 'Tech & Software' : selectedCategory}",
     "competition": "Low",
     "rpmEstimate": "$20 - $40 RPM",
     "growthScore": 92,
@@ -151,26 +87,35 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
           type: 'niche',
           prompt,
           systemInstruction: 'You are an elite digital creator strategist and YouTube algorithm research director. Always output valid JSON only.',
-          model: defaultProvider.model,
-          provider: defaultProvider.type,
-          apiKey: defaultProvider.apiKey,
+          model: defaultProvider?.model || 'gemini-3.8-flash',
+          provider: defaultProvider?.type || 'gemini',
+          apiKey: defaultProvider?.apiKey,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Niche scan failed.');
 
-      // Extract JSON from response
+      // Extract JSON from response (handling markdown fences)
       const rawText = data.text || '';
+      let parsed = null;
       const jsonMatch = rawText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setNiches(parsed);
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Try cleaning markdown
+          const cleaned = jsonMatch[0].replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(cleaned);
         }
       }
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setNiches(parsed);
+      } else {
+        setScanError('Unable to parse scanner results. Please click "Scan Niches" again.');
+      }
     } catch (err: any) {
-      alert(`Niche scanner notice: ${err?.message || 'Using curated market intel.'}`);
+      setScanError(err?.message || 'Niche scanner notice: unable to complete scan at this moment.');
     } finally {
       setIsScanning(false);
     }
@@ -183,11 +128,15 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
   };
 
   const filteredNiches = niches.filter((n) => {
-    if (selectedCategory !== 'all' && n.category.toLowerCase() !== selectedCategory.toLowerCase()) return false;
+    if (selectedCategory !== 'all' && n.category !== selectedCategory) return false;
     if (competitionFilter !== 'all' && n.competition !== competitionFilter) return false;
     if (topicInput.trim()) {
       const q = topicInput.toLowerCase();
-      if (!n.title.toLowerCase().includes(q) && !n.tagline.toLowerCase().includes(q)) return false;
+      return (
+        n.title.toLowerCase().includes(q) ||
+        n.tagline.toLowerCase().includes(q) ||
+        n.targetAudience.toLowerCase().includes(q)
+      );
     }
     return true;
   });
@@ -195,49 +144,73 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-7xl mx-auto w-full">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 via-neutral-900 to-neutral-950">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-rose-400 mb-1">
-            <Compass className="w-4 h-4" />
-            <span>Market Intelligence & Creator Strategy</span>
+      <div className="p-6 rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-950 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center">
+              <Compass className="w-4 h-4" />
+            </div>
+            <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">
+              CreatorKit Intelligence
+            </span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-100">
-            Creator Niche Finder & RPM Analyzer
-          </h1>
-          <p className="text-xs text-neutral-400 mt-1 max-w-2xl">
-            Discover under-served, high-CPM creator niches with proven audience demand, scroll-stopping video hooks, and low saturated competition.
+          <h1 className="text-xl font-bold text-neutral-100">AI Niche Finder & Opportunity Scanner</h1>
+          <p className="text-xs text-neutral-400 max-w-2xl">
+            Scan high-growth, low-competition content niches. Dissect estimated RPM, target audience psychology, high-retention video hooks, and monetization angles.
           </p>
         </div>
 
-        <button
-          onClick={handleScanNiches}
-          disabled={isScanning}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-xs text-white bg-rose-600 hover:bg-rose-500 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm shrink-0"
-        >
-          {isScanning ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Scanning Platform Algorithms...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Run AI Niche Scanner</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-center">
+          <button
+            onClick={onRequestApiKey}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 transition-colors"
+          >
+            <Key className="w-3.5 h-3.5 text-amber-400" />
+            <span>API Key / AI Provider</span>
+          </button>
+
+          <button
+            onClick={handleScanNiches}
+            disabled={isScanning}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 active:scale-[0.98] transition-all shadow-sm"
+          >
+            {isScanning ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Scanning Real Niches...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Scan Trending Niches with AI</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Filter and Scanner Bar */}
+      {scanError && (
+        <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-900/60 text-xs text-rose-300 flex items-center justify-between gap-3">
+          <span>{scanError}</span>
+          <button
+            onClick={onRequestApiKey}
+            className="px-2.5 py-1 rounded bg-rose-900/60 hover:bg-rose-800 text-white font-semibold text-[11px] shrink-0"
+          >
+            Configure API Key
+          </button>
+        </div>
+      )}
+
+      {/* Query and Filters Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
         <div className="sm:col-span-5 relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
           <input
             type="text"
-            placeholder="Search topic or broad interest (e.g. AI Coding, Micro-SaaS, Longevity, Video Production)..."
             value={topicInput}
             onChange={(e) => setTopicInput(e.target.value)}
-            className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-9 pr-3.5 py-2.5 text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-rose-500"
+            placeholder="Search keyword (e.g. software, fitness, finance, gaming)..."
+            className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-rose-500"
           />
         </div>
 
@@ -248,7 +221,7 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
             className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2.5 text-neutral-200 focus:outline-none focus:border-rose-500"
           >
             <option value="all">All Categories</option>
-            <option value="Tech & AI">Tech, AI & Software</option>
+            <option value="Tech & Software">Tech, AI & Software</option>
             <option value="Health & Science">Health, Fitness & Longevity</option>
             <option value="Business & Finance">Business, Micro-Assets & Finance</option>
             <option value="Productivity">Personal Productivity & Habits</option>
@@ -275,124 +248,155 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
             onChange={(e) => setCompetitionFilter(e.target.value as any)}
             className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2.5 text-neutral-200 focus:outline-none focus:border-rose-500"
           >
-            <option value="all">All Competition Levels</option>
-            <option value="Low">Low Competition Only</option>
+            <option value="all">All Competition</option>
+            <option value="Low">Low Competition</option>
             <option value="Medium">Medium Competition</option>
           </select>
         </div>
       </div>
 
-      {/* Niche Cards Grid */}
-      <div className="space-y-6">
-        {filteredNiches.map((niche) => (
-          <div
-            key={niche.id}
-            className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-5 hover:border-neutral-700 transition-all shadow-sm"
+      {/* Niche Cards Grid or Clean Empty State */}
+      {filteredNiches.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-12 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-800/80 text-rose-400 flex items-center justify-center mx-auto">
+            <Compass className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-neutral-200">No Niches Scanned Yet</h3>
+            <p className="text-xs text-neutral-500 max-w-md mx-auto">
+              Ready to find high-growth, underserved content opportunities? Click below to run a live scan targeting {selectedPlatform}.
+            </p>
+          </div>
+          <button
+            onClick={handleScanNiches}
+            disabled={isScanning}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 transition-colors shadow-sm"
           >
-            {/* Header: Title, Category, RPM & Growth */}
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div className="space-y-1.5 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300">
-                    {niche.category}
-                  </span>
-                  <span
-                    className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                      niche.competition === 'Low'
-                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                    }`}
-                  >
-                    {niche.competition} Competition
-                  </span>
-                  <span className="text-[11px] font-mono text-rose-300 font-bold bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-full">
-                    {niche.rpmEstimate}
-                  </span>
+            {isScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            <span>{isScanning ? 'Scanning...' : 'Scan Niches with AI'}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {filteredNiches.map((niche) => (
+            <div
+              key={niche.id}
+              className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-5 hover:border-neutral-700 transition-all shadow-sm"
+            >
+              {/* Header: Title, Category, RPM & Growth */}
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300">
+                      {niche.category}
+                    </span>
+                    <span
+                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                        niche.competition === 'Low'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      {niche.competition} Competition
+                    </span>
+                    <span className="text-[11px] font-mono text-rose-300 font-bold bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-full">
+                      {niche.rpmEstimate}
+                    </span>
+                  </div>
+
+                  <h2 className="text-base font-bold text-neutral-100">{niche.title}</h2>
+                  <p className="text-xs text-neutral-400">{niche.tagline}</p>
                 </div>
 
-                <h2 className="text-base font-bold text-neutral-100">{niche.title}</h2>
-                <p className="text-xs text-neutral-400">{niche.tagline}</p>
+                {/* Action Button */}
+                <button
+                  onClick={() => {
+                    if (onRequestAuth('start a project in this niche')) {
+                      onStartProjectInNiche(niche);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 active:scale-[0.98] transition-all shadow-sm shrink-0 self-start"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Start Project in this Niche</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
 
-              {/* Action Button */}
-              <button
-                onClick={() => {
-                  if (onRequestAuth('start a project in this niche')) {
-                    onStartProjectInNiche(niche);
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 active:scale-[0.98] transition-all shadow-sm shrink-0 self-start"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Start Project in this Niche</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+              {/* Metrics Breakdown */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1">
+                  <span className="text-[10px] text-neutral-500 uppercase font-semibold">Target Audience</span>
+                  <p className="text-neutral-300 leading-relaxed">{niche.targetAudience}</p>
+                </div>
 
-            {/* Metrics Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
-              <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1">
-                <span className="text-[10px] text-neutral-500 uppercase font-semibold">Target Audience</span>
-                <p className="text-neutral-300 leading-relaxed">{niche.targetAudience}</p>
+                <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1">
+                  <span className="text-[10px] text-neutral-500 uppercase font-semibold">Why It Works</span>
+                  <p className="text-neutral-300 leading-relaxed">{niche.whyItWorks}</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1">
+                  <span className="text-[10px] text-neutral-500 uppercase font-semibold">Monetization Streams</span>
+                  <ul className="text-neutral-300 space-y-0.5">
+                    {niche.monetizationMethods.map((m, idx) => (
+                      <li key={idx} className="flex items-center gap-1.5">
+                        <DollarSign className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span>{m}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1">
-                <span className="text-[10px] text-neutral-500 uppercase font-semibold">Why It Works</span>
-                <p className="text-neutral-300 leading-relaxed">{niche.whyItWorks}</p>
-              </div>
-
-              <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1">
-                <span className="text-[10px] text-neutral-500 uppercase font-semibold">Monetization Streams</span>
-                <ul className="text-neutral-300 space-y-0.5 list-disc list-inside">
-                  {niche.monetizationMethods.map((m, idx) => (
-                    <li key={idx} className="truncate">{m}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Top 5 Proven Video Hooks */}
-            <div className="space-y-2 pt-2 border-t border-neutral-800/80">
-              <span className="text-xs font-bold text-neutral-200 flex items-center gap-1.5">
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                <span>Top 5 High-Retention Video Hooks for this Niche</span>
-              </span>
-
-              <div className="space-y-1.5">
-                {niche.topVideoHooks.map((hook, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/60 text-xs hover:border-neutral-700 transition-colors"
-                  >
-                    <div className="flex items-start gap-2 min-w-0">
-                      <span className="font-mono text-neutral-500 text-[11px] shrink-0">#{idx + 1}</span>
-                      <p className="text-neutral-200 italic font-medium">"{hook}"</p>
-                    </div>
-
-                    <button
-                      onClick={() => handleCopyHook(hook)}
-                      className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-neutral-800 transition-colors shrink-0"
-                      title="Copy hook to clipboard"
-                    >
-                      {copiedHook === hook ? (
-                        <>
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                          <span className="text-emerald-400">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+              {/* Recommended Formats */}
+              <div className="flex items-center gap-2 flex-wrap text-xs pt-1">
+                <span className="text-[11px] text-neutral-500 flex items-center gap-1 font-medium">
+                  <Layers className="w-3 h-3" />
+                  <span>Suggested Formats:</span>
+                </span>
+                {niche.contentFormats.map((fmt, idx) => (
+                  <span key={idx} className="px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px]">
+                    {fmt}
+                  </span>
                 ))}
               </div>
+
+              {/* Proven Video Hooks */}
+              <div className="p-4 rounded-xl bg-neutral-950/70 border border-neutral-800/80 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Tested Video Hooks for {niche.title}</span>
+                  </span>
+                  <span className="text-[10px] text-neutral-500">Click hook to copy</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {niche.topVideoHooks.map((hook, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleCopyHook(hook)}
+                      className="group flex items-center justify-between p-2 rounded-lg bg-neutral-900/80 hover:bg-neutral-850 border border-neutral-800/60 hover:border-neutral-700 cursor-pointer transition-colors"
+                    >
+                      <span className="text-neutral-300 group-hover:text-neutral-100 pr-3">"{hook}"</span>
+                      <button
+                        type="button"
+                        className="text-neutral-500 group-hover:text-rose-400 shrink-0 transition-colors"
+                      >
+                        {copiedHook === hook ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

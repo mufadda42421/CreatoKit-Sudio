@@ -15,6 +15,8 @@ import {
   NicheResult,
 } from './types';
 import { storage } from './lib/storage';
+import { auth, onAuthStateChanged, firebaseSignOut } from './lib/firebase';
+import { firestoreService } from './lib/firestoreService';
 import { Sidebar, NavView } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { NewProjectModal } from './components/modals/NewProjectModal';
@@ -89,6 +91,87 @@ export default function App() {
     };
   });
 
+  // Firebase Auth sync and Firestore real-time subscriptions
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        // Fetch or sync user profile
+        const existingProfile = await firestoreService.getUserProfile(fbUser.uid);
+        const profile: UserProfile = existingProfile || {
+          id: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Creator',
+          email: fbUser.email || '',
+          avatarUrl: fbUser.photoURL || undefined,
+          handle: `@${(fbUser.email?.split('@')[0] || 'creator').toLowerCase()}`,
+          channelName: `${fbUser.displayName || 'Creator'} Studio`,
+          joinedAt: new Date().toISOString(),
+        };
+        storage.saveAuthUser(profile);
+        setCurrentUser(profile);
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    // Real-time Firestore sync for Social Accounts
+    const unsubSocial = firestoreService.subscribeSocialAccounts(currentUser.id, (cloudAccounts) => {
+      if (cloudAccounts && cloudAccounts.length > 0) {
+        setSocialAccounts((prev) => {
+          const merged = [...prev];
+          cloudAccounts.forEach((c) => {
+            const idx = merged.findIndex((m) => m.id === c.id || m.platform === c.platform);
+            if (idx >= 0) {
+              merged[idx] = c;
+            } else {
+              merged.push(c);
+            }
+          });
+          return merged;
+        });
+      }
+    });
+
+    // Real-time Firestore sync for Projects
+    const unsubProjects = firestoreService.subscribeProjects(currentUser.id, (cloudProjects) => {
+      if (cloudProjects && cloudProjects.length > 0) {
+        setProjects((prev) => {
+          const merged = [...prev];
+          cloudProjects.forEach((cp) => {
+            const idx = merged.findIndex((p) => p.id === cp.id);
+            if (idx >= 0) merged[idx] = cp;
+            else merged.unshift(cp);
+          });
+          return merged;
+        });
+      }
+    });
+
+    // Real-time Firestore sync for Publishing Jobs
+    const unsubJobs = firestoreService.subscribePublishingJobs(currentUser.id, (cloudJobs) => {
+      if (cloudJobs && cloudJobs.length > 0) {
+        setPublishingJobs((prev) => {
+          const merged = [...prev];
+          cloudJobs.forEach((cj) => {
+            const idx = merged.findIndex((j) => j.id === cj.id);
+            if (idx >= 0) merged[idx] = cj;
+            else merged.unshift(cj);
+          });
+          return merged;
+        });
+      }
+    });
+
+    return () => {
+      unsubSocial();
+      unsubProjects();
+      unsubJobs();
+    };
+  }, [currentUser?.id]);
+
   // Auth gate helper: allows exploring, but gates any action
   const handleRequestAuth = (actionName: string): boolean => {
     if (currentUser) {
@@ -105,7 +188,10 @@ export default function App() {
     setIsAuthModalOpen(false);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await firebaseSignOut(auth);
+    } catch {}
     storage.saveAuthUser(null);
     setCurrentUser(null);
   };
@@ -129,25 +215,49 @@ export default function App() {
 
   const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0] || null;
 
-  // Project CRUD
-  const handleCreateProject = (newProject: Project) => {
+  // Project CRUD with Firestore persistence
+  const handleCreateProject = async (newProject: Project) => {
     storage.saveProject(newProject);
     const updated = storage.getProjects();
     setProjects(updated);
     handleSelectProject(newProject.id);
+
+    if (currentUser?.id) {
+      try {
+        await firestoreService.saveProject(currentUser.id, newProject);
+      } catch (err) {
+        console.warn('Firestore project save note:', err);
+      }
+    }
   };
 
-  const handleSaveProject = (project: Project) => {
+  const handleSaveProject = async (project: Project) => {
     storage.saveProject(project);
     setProjects(storage.getProjects());
+
+    if (currentUser?.id) {
+      try {
+        await firestoreService.saveProject(currentUser.id, project);
+      } catch (err) {
+        console.warn('Firestore project update note:', err);
+      }
+    }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     storage.deleteProject(id);
     const updated = storage.getProjects();
     setProjects(updated);
     if (activeProjectId === id && updated[0]) {
       handleSelectProject(updated[0].id);
+    }
+
+    if (currentUser?.id) {
+      try {
+        await firestoreService.deleteProject(currentUser.id, id);
+      } catch (err) {
+        console.warn('Firestore project delete note:', err);
+      }
     }
   };
 
@@ -265,15 +375,31 @@ export default function App() {
     setProviders(storage.getAIProviders());
   };
 
-  // Social Hub Handlers
-  const handleSaveSocialAccount = (account: SocialAccount) => {
+  // Social Hub Handlers with Firestore persistence
+  const handleSaveSocialAccount = async (account: SocialAccount) => {
     storage.saveSocialAccount(account);
     setSocialAccounts(storage.getSocialAccounts());
+
+    if (currentUser?.id) {
+      try {
+        await firestoreService.saveSocialAccount(currentUser.id, account);
+      } catch (err) {
+        console.warn('Firestore social account save note:', err);
+      }
+    }
   };
 
-  const handleSavePublishingJob = (job: PublishingJob) => {
+  const handleSavePublishingJob = async (job: PublishingJob) => {
     storage.savePublishingJob(job);
     setPublishingJobs(storage.getPublishingJobs());
+
+    if (currentUser?.id) {
+      try {
+        await firestoreService.savePublishingJob(currentUser.id, job);
+      } catch (err) {
+        console.warn('Firestore publishing job save note:', err);
+      }
+    }
   };
 
   // Update Script from AI
@@ -529,6 +655,7 @@ export default function App() {
               onUploadMedia={handleUploadMedia}
               onRequestAuth={handleRequestAuth}
               isAuthenticated={!!currentUser}
+              userId={currentUser?.id}
             />
           )}
 

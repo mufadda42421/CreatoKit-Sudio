@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['id', 'name', 'email', 'joinedAt']) &&
+             data.keys().hasOnly(['id', 'name', 'email', 'joinedAt', 'avatarUrl', 'handle', 'channelName']) &&
+             data.id == userId &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+             data.joinedAt is string && data.joinedAt.size() <= 40 &&
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+             (!('handle' in data) || (data.handle is string && data.handle.size() <= 80)) &&
+             (!('channelName' in data) || (data.channelName is string && data.channelName.size() <= 100));
+    }
+
+    function isValidSocialAccount(data, userId) {
+      return data.keys().hasAll(['id', 'userId', 'platform', 'username', 'displayName', 'status']) &&
+             data.keys().hasOnly(['id', 'userId', 'platform', 'username', 'displayName', 'status', 'avatarUrl', 'connectedAt', 'lastSyncAt', 'permissions', 'channelSubscribers']) &&
+             data.userId == userId &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.platform in ['youtube', 'instagram', 'tiktok', 'x', 'linkedin', 'facebook'] &&
+             data.username is string && data.username.size() > 0 && data.username.size() <= 120 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 120 &&
+             data.status in ['connected', 'disconnected', 'expired'] &&
+             (!('permissions' in data) || (data.permissions is list && data.permissions.size() <= 20)) &&
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+             (!('connectedAt' in data) || (data.connectedAt is string && data.connectedAt.size() <= 40)) &&
+             (!('lastSyncAt' in data) || (data.lastSyncAt is string && data.lastSyncAt.size() <= 40)) &&
+             (!('channelSubscribers' in data) || (data.channelSubscribers is string && data.channelSubscribers.size() <= 80));
+    }
+
+    function isValidProject(data, userId) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'platform', 'status', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'name', 'description', 'platform', 'aspectRatio', 'status', 'createdAt', 'updatedAt', 'thumbnailUrl', 'script', 'targetDurationSec']) &&
+             data.userId == userId &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.platform in ['youtube', 'instagram', 'tiktok', 'x', 'linkedin', 'facebook'] &&
+             data.status in ['active', 'archived'] &&
+             data.createdAt is string && data.createdAt.size() <= 40 &&
+             data.updatedAt is string && data.updatedAt.size() <= 40 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('aspectRatio' in data) || (data.aspectRatio in ['16:9', '9:16', '1:1', '4:5'])) &&
+             (!('script' in data) || (data.script is string && data.script.size() <= 100000)) &&
+             (!('targetDurationSec' in data) || (data.targetDurationSec is number)) &&
+             (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 1000));
+    }
+
+    function isValidPublishingJob(data, userId) {
+      return data.keys().hasAll(['id', 'userId', 'platform', 'caption', 'status', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'platform', 'title', 'caption', 'mediaUrl', 'scheduledAt', 'status', 'error', 'platformPostUrl', 'retryCount', 'createdAt']) &&
+             data.userId == userId &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.platform in ['youtube', 'instagram', 'tiktok', 'x', 'linkedin', 'facebook'] &&
+             data.caption is string && data.caption.size() <= 10000 &&
+             data.status in ['draft', 'queued', 'scheduled', 'publishing', 'published', 'failed'] &&
+             data.createdAt is string && data.createdAt.size() <= 40 &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 300)) &&
+             (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 2000)) &&
+             (!('scheduledAt' in data) || (data.scheduledAt is string && data.scheduledAt.size() <= 40)) &&
+             (!('error' in data) || (data.error is string && data.error.size() <= 1000)) &&
+             (!('platformPostUrl' in data) || (data.platformPostUrl is string && data.platformPostUrl.size() <= 1000)) &&
+             (!('retryCount' in data) || (data.retryCount is number));
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // PII Isolation: No listing of users
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(request.resource.data, userId);
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(request.resource.data, userId);
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Social Accounts
+      match /socialAccounts/{accountId} {
+        allow get: if isOwner(userId) && isValidId(accountId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(accountId) && isValidSocialAccount(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(accountId) && isValidSocialAccount(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(accountId);
+      }
+
+      // Projects
+      match /projects/{projectId} {
+        allow get: if isOwner(userId) && isValidId(projectId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(projectId) && isValidProject(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(projectId) && isValidProject(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(projectId);
+      }
+
+      // Publishing Jobs
+      match /publishingJobs/{jobId} {
+        allow get: if isOwner(userId) && isValidId(jobId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(jobId) && isValidPublishingJob(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(jobId) && isValidPublishingJob(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(jobId);
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

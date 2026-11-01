@@ -32,6 +32,7 @@ interface SocialHubViewProps {
   onUploadMedia: (file: File) => Promise<void>;
   onRequestAuth: (actionName: string) => boolean;
   isAuthenticated: boolean;
+  userId?: string;
 }
 
 export const SocialHubView: React.FC<SocialHubViewProps> = ({
@@ -44,6 +45,7 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
   onUploadMedia,
   onRequestAuth,
   isAuthenticated,
+  userId,
 }) => {
   const [activeTab, setActiveTab] = useState<'composer' | 'queue' | 'accounts'>('composer');
 
@@ -130,7 +132,10 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
       }, 500);
     } catch (err) {
       setIsUploadingVideo(false);
-      alert('Error uploading video file.');
+      setSubmitResult({
+        success: false,
+        message: 'Error uploading video file. Please check file format.',
+      });
     }
   };
 
@@ -204,7 +209,10 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
     }
 
     if (limitConfig.requiresTitle && !postTitle.trim()) {
-      alert(`Title is required for ${targetPlatform}`);
+      setSubmitResult({
+        success: false,
+        message: `Video title is required for ${targetPlatform} publishing.`,
+      });
       return;
     }
 
@@ -741,6 +749,7 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
         }}
         onConnected={handlePlatformConnected}
         pendingActionTitle={`upload and publish your video to ${platformForModal}`}
+        userId={userId}
       />
     </div>
   );

@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile and settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "handle": { "type": "string" },
+        "channelName": { "type": "string" },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "joinedAt"]
+    },
+    "SocialAccount": {
+      "title": "SocialAccount",
+      "description": "Connected social media account for creator publishing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "platform": { "type": "string" },
+        "username": { "type": "string" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "connectedAt": { "type": "string" },
+        "lastSyncAt": { "type": "string" },
+        "permissions": { "type": "array" },
+        "channelSubscribers": { "type": "string" }
+      },
+      "required": ["id", "userId", "platform", "username", "displayName", "status"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Creator video project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "platform": { "type": "string" },
+        "aspectRatio": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "script": { "type": "string" },
+        "targetDurationSec": { "type": "number" }
+      },
+      "required": ["id", "userId", "name", "platform", "status", "createdAt", "updatedAt"]
+    },
+    "PublishingJob": {
+      "title": "PublishingJob",
+      "description": "Social media video publishing job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "platform": { "type": "string" },
+        "title": { "type": "string" },
+        "caption": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "scheduledAt": { "type": "string" },
+        "status": { "type": "string" },
+        "error": { "type": "string" },
+        "retryCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "platform", "caption", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile document"
+    },
+    "/users/{userId}/socialAccounts/{accountId}": {
+      "schema": { "$ref": "#/entities/SocialAccount" },
+      "description": "Real connected social media account for creator"
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "User video and content projects"
+    },
+    "/users/{userId}/publishingJobs/{jobId}": {
+      "schema": { "$ref": "#/entities/PublishingJob" },
+      "description": "Video publish queue and status items"
+    }
+  }
+}

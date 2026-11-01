@@ -92,7 +92,7 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
 
   const executeGeneration = async (tool: AIToolType) => {
     if (!onRequestAuth('generate AI content')) return;
-    if (!defaultProvider?.apiKey) {
+    if (!defaultProvider?.apiKey && defaultProvider?.type !== 'gemini') {
       onRequestApiKey(`AI Studio (${tool})`);
       return;
     }
@@ -153,7 +153,7 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
     e.preventDefault();
     if (!chatInput.trim() || loading) return;
     if (!onRequestAuth('use AI Chat Assistant')) return;
-    if (!defaultProvider?.apiKey) {
+    if (!defaultProvider?.apiKey && defaultProvider?.type !== 'gemini') {
       onRequestApiKey('AI Chat Assistant');
       return;
     }
@@ -196,6 +196,8 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
     }
   };
 
+  const isGeminiDefault = defaultProvider?.type === 'gemini' && !defaultProvider?.apiKey;
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-7xl mx-auto w-full">
       {/* Top Banner / Provider Info */}
@@ -209,7 +211,11 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
               <h1 className="text-sm font-bold text-neutral-100">AI Creator Studio</h1>
               {defaultProvider?.apiKey ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  Key Configured
+                  Custom Key Active
+                </span>
+              ) : isGeminiDefault ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                  Studio AI Active
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
@@ -224,15 +230,13 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-center">
-          {!defaultProvider?.apiKey && (
-            <button
-              onClick={() => onRequestApiKey('AI Studio')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-colors flex items-center gap-1.5 shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Add API Key</span>
-            </button>
-          )}
+          <button
+            onClick={() => onRequestApiKey('AI Studio')}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-colors flex items-center gap-1.5 shadow-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{defaultProvider?.apiKey ? 'Update API Key' : 'Configure BYOK'}</span>
+          </button>
           <button
             onClick={onOpenSettings}
             className="text-xs text-neutral-400 hover:text-neutral-200 underline underline-offset-2 px-2 py-1"
