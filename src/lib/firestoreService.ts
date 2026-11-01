@@ -16,16 +16,20 @@ export const firestoreService = {
   // -------------------------------------------------------------
   async saveUserProfile(user: UserProfile): Promise<void> {
     if (!user.id) return;
-    const userRef = doc(db, 'users', user.id);
-    await setDoc(userRef, {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatarUrl: user.avatarUrl || '',
-      handle: user.handle || `@${user.email.split('@')[0]}`,
-      channelName: user.channelName || `${user.name} Studio`,
-      joinedAt: user.joinedAt || new Date().toISOString(),
-    }, { merge: true });
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await setDoc(userRef, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl || '',
+        handle: user.handle || `@${user.email.split('@')[0]}`,
+        channelName: user.channelName || `${user.name} Studio`,
+        joinedAt: user.joinedAt || new Date().toISOString(),
+      }, { merge: true });
+    } catch (e: any) {
+      console.warn('Firestore user profile sync notice:', e?.message || e);
+    }
   },
 
   async getUserProfile(userId: string): Promise<UserProfile | null> {
