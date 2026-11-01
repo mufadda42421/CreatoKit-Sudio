@@ -19,6 +19,7 @@ import {
   Zap,
   Key,
 } from 'lucide-react';
+import { safeFetchJson } from '../../lib/apiClient';
 
 interface NicheFinderViewProps {
   onStartProjectInNiche: (niche: NicheResult) => void;
@@ -80,7 +81,7 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
   }
 ]`;
 
-      const res = await fetch('/api/ai/generate', {
+      const res = await safeFetchJson<{ text: string; error?: string }>('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -93,8 +94,11 @@ Format the response strictly as a JSON array of 3 objects with these exact keys:
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Niche scan failed.');
+      if (!res.ok || !res.data) {
+        throw new Error(res.error || res.data?.error || 'Niche scan failed.');
+      }
+
+      const data = res.data;
 
       // Extract JSON from response (handling markdown fences)
       const rawText = data.text || '';

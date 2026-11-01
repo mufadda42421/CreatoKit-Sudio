@@ -441,7 +441,7 @@ app.post('/api/ai/generate', async (req, res) => {
 
       if (!response.ok) {
         const errorData = await response.text();
-        return res.status(response.status).json({ error: `Provider request failed (${response.status}): ${errorData}` });
+        return res.status(400).json({ error: `Provider request failed (${response.status}): ${parseErrorMessage(errorData)}` });
       }
 
       const data = await response.json();
@@ -470,7 +470,7 @@ app.post('/api/ai/generate', async (req, res) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        return res.status(response.status).json({ error: `Anthropic API error (${response.status}): ${errText}` });
+        return res.status(400).json({ error: `Anthropic API error (${response.status}): ${parseErrorMessage(errText)}` });
       }
 
       const data = await response.json();
@@ -482,7 +482,7 @@ app.post('/api/ai/generate', async (req, res) => {
   } catch (error: any) {
     const cleanMsg = parseErrorMessage(error);
     console.error('AI Generation error:', cleanMsg);
-    return res.status(500).json({
+    return res.status(400).json({
       error: cleanMsg || 'Failed to generate AI response. Please check your provider settings or network connection.',
     });
   }
@@ -490,10 +490,12 @@ app.post('/api/ai/generate', async (req, res) => {
 
 // -------------------------------------------------------------
 // Provider Connection Test Endpoint
+// Always returns HTTP 200 with JSON to prevent proxy error page interception
 // -------------------------------------------------------------
 app.post('/api/ai/test-connection', async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
   try {
-    const { provider, apiKey, baseUrl, model } = req.body;
+    const { provider = 'gemini', apiKey = '', baseUrl, model } = req.body || {};
 
     if (provider === 'gemini') {
       const client = getGeminiClient(apiKey);
@@ -514,7 +516,7 @@ app.post('/api/ai/test-connection', async (req, res) => {
       } catch (geminiErr: any) {
         const cleanMsg = parseErrorMessage(geminiErr);
         if (cleanMsg.includes('API key not valid') || cleanMsg.includes('API_KEY_INVALID')) {
-          return res.status(400).json({
+          return res.json({
             success: false,
             message: 'API key is invalid. Please verify your key from Google AI Studio.',
           });
@@ -527,84 +529,98 @@ app.post('/api/ai/test-connection', async (req, res) => {
             model: testModel,
           });
         }
-        return res.status(400).json({
+        return res.json({
           success: false,
-          message: cleanMsg,
+          message: cleanMsg || 'Failed to connect to Gemini API.',
         });
       }
     }
 
     if (provider === 'openai' || provider === 'openrouter' || provider === 'custom') {
-      if (!apiKey) {
-        return res.status(400).json({ success: false, message: 'API key is required for connection test.' });
+      if (!apiKey || !apiKey.trim()) {
+        return res.json({ success: false, message: 'API key is required for connection test.' });
       }
       const endpoint = baseUrl || (provider === 'openrouter' 
         ? 'https://openrouter.ai/api/v1/chat/completions' 
         : 'https://api.openai.com/v1/chat/completions');
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: model || (provider === 'openrouter' ? 'openai/gpt-4o-mini' : 'gpt-4o-mini'),
-          messages: [{ role: 'user', content: 'Ping test. Reply with: Connected.' }],
-          max_tokens: 10,
-        }),
-      });
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey.trim()}`,
+          },
+          body: JSON.stringify({
+            model: model || (provider === 'openrouter' ? 'openai/gpt-4o-mini' : 'gpt-4o-mini'),
+            messages: [{ role: 'user', content: 'Ping test. Reply with: Connected.' }],
+            max_tokens: 10,
+          }),
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        return res.status(response.status).json({
+        if (!response.ok) {
+          const errorText = await response.text();
+          return res.json({
+            success: false,
+            message: `Connection failed (${response.status}): ${parseErrorMessage(errorText)}`,
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: `Successfully connected to ${provider}.`,
+        });
+      } catch (fetchErr: any) {
+        return res.json({
           success: false,
-          message: `Connection failed (${response.status}): ${parseErrorMessage(errorText)}`,
+          message: `Could not reach ${provider} endpoint: ${fetchErr?.message || 'Network error'}`,
         });
       }
-
-      return res.json({
-        success: true,
-        message: `Successfully connected to ${provider}.`,
-      });
     }
 
     if (provider === 'anthropic') {
-      if (!apiKey) {
-        return res.status(400).json({ success: false, message: 'API key is required for connection test.' });
+      if (!apiKey || !apiKey.trim()) {
+        return res.json({ success: false, message: 'API key is required for connection test.' });
       }
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: model || 'claude-3-5-sonnet-20241022',
-          max_tokens: 10,
-          messages: [{ role: 'user', content: 'Ping test. Reply with: Connected.' }],
-        }),
-      });
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey.trim(),
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: model || 'claude-3-5-sonnet-20241022',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'Ping test. Reply with: Connected.' }],
+          }),
+        });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        return res.status(response.status).json({
+        if (!response.ok) {
+          const errText = await response.text();
+          return res.json({
+            success: false,
+            message: `Anthropic connection failed (${response.status}): ${parseErrorMessage(errText)}`,
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: 'Successfully connected to Anthropic Claude.',
+        });
+      } catch (anthropicErr: any) {
+        return res.json({
           success: false,
-          message: `Anthropic connection failed (${response.status}): ${parseErrorMessage(errText)}`,
+          message: `Could not reach Anthropic API: ${anthropicErr?.message || 'Network error'}`,
         });
       }
-
-      return res.json({
-        success: true,
-        message: 'Successfully connected to Anthropic Claude.',
-      });
     }
 
-    return res.status(400).json({ success: false, message: `Unsupported provider: ${provider}` });
+    return res.json({ success: false, message: `Unsupported provider: ${provider}` });
   } catch (error: any) {
     const cleanMsg = parseErrorMessage(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: cleanMsg || 'Connection test failed.',
     });
@@ -710,8 +726,20 @@ app.post('/api/social/publish', async (req, res) => {
         : `Successfully published to ${platform}.`,
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Failed to process publishing request.' });
+    return res.status(400).json({ error: error?.message || 'Failed to process publishing request.' });
   }
+});
+
+// Explicit JSON 404 handler for API routes (prevents Vite from serving HTML on unknown API routes)
+app.all('/api/*', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  return res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
+});
+
+// Explicit API error handler
+app.use('/api', (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  res.setHeader('Content-Type', 'application/json');
+  return res.status(400).json({ error: parseErrorMessage(err) || 'Server processing error.' });
 });
 
 // -------------------------------------------------------------

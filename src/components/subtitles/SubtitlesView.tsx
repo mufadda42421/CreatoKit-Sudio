@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { safeFetchJson } from '../../lib/apiClient';
 
 interface SubtitlesViewProps {
   project: Project;
@@ -149,7 +150,7 @@ export const SubtitlesView: React.FC<SubtitlesViewProps> = ({
         throw new Error('Please enter text into the transcript box or add a script to the active project first.');
       }
 
-      const res = await fetch('/api/ai/generate', {
+      const res = await safeFetchJson<{ text: string; error?: string }>('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -158,10 +159,9 @@ export const SubtitlesView: React.FC<SubtitlesViewProps> = ({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to auto-generate subtitles.');
+      if (!res.ok || !res.data) throw new Error(res.error || res.data?.error || 'Failed to auto-generate subtitles.');
 
-      const parsed = parseSRT(data.text);
+      const parsed = parseSRT(res.data.text || '');
       if (parsed.length > 0) {
         onSaveSegments(parsed);
         setActiveSegmentId(parsed[0].id);

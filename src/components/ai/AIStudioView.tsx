@@ -16,6 +16,7 @@ import {
   Loader2,
   AlertCircle,
 } from 'lucide-react';
+import { safeFetchJson } from '../../lib/apiClient';
 
 interface AIStudioViewProps {
   activeProject: Project | null;
@@ -121,7 +122,7 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
         promptText = `Repurpose the following creator script/transcript into multiple platform assets:\n\nSOURCE CONTENT:\n"""\n${repurposeSourceText || topic}\n"""\n\nGenerate:\n1. 60-Second TikTok / Reels Script with Visual Cues\n2. YouTube Shorts 30-Second Script\n3. Engaging 5-Post X (Twitter) Thread\n4. Professional LinkedIn Thought Leadership Post\n5. Community Tab Discussion Poll Prompt`;
       }
 
-      const res = await fetch('/api/ai/generate', {
+      const res = await safeFetchJson<{ text: string; error?: string }>('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,12 +136,11 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate AI content.');
+      if (!res.ok || !res.data) {
+        throw new Error(res.error || res.data?.error || 'Failed to generate AI content.');
       }
 
-      setGeneratedOutput(data.text);
+      setGeneratedOutput(res.data.text || '');
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Failed to connect to AI provider.');
@@ -168,7 +168,7 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
     try {
       const systemInstruction = `You are CreatorKit AI Copilot. You are collaborating with a content creator on active project "${activeProject?.name || 'Untitled'}" (${activeProject?.platform || 'YouTube'}). Provide actionable, structured advice, script revisions, and creative feedback.`;
 
-      const res = await fetch('/api/ai/generate', {
+      const res = await safeFetchJson<{ text: string; error?: string }>('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -183,12 +183,11 @@ export const AIStudioView: React.FC<AIStudioViewProps> = ({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Chat response failed.');
+      if (!res.ok || !res.data) {
+        throw new Error(res.error || res.data?.error || 'Chat response failed.');
       }
 
-      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.text }]);
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: res.data?.text || '' }]);
     } catch (err: any) {
       setError(err?.message || 'Chat request failed.');
     } finally {

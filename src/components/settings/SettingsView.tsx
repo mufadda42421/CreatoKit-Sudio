@@ -14,6 +14,7 @@ import {
   Moon,
   Laptop,
 } from 'lucide-react';
+import { safeFetchJson } from '../../lib/apiClient';
 
 interface SettingsViewProps {
   providers: AIProviderConfig[];
@@ -48,31 +49,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleTestConnection = async (provider: AIProviderConfig) => {
     setTestingId(provider.id);
     try {
-      const res = await fetch('/api/ai/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: provider.type,
-          apiKey: provider.apiKey,
-          baseUrl: provider.baseUrl,
-          model: provider.model,
-        }),
-      });
+      const res = await safeFetchJson<{ success: boolean; message: string }>(
+        '/api/ai/test-connection',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: provider.type,
+            apiKey: provider.apiKey,
+            baseUrl: provider.baseUrl,
+            model: provider.model,
+          }),
+        }
+      );
 
-      const data = await res.json();
+      const isSuccess = res.ok && !!res.data?.success;
+      const message = res.data?.message || res.error || (isSuccess ? 'Connected successfully' : 'Failed to connect');
+
       setTestResults((prev) => ({
         ...prev,
         [provider.id]: {
-          success: data.success,
-          message: data.message || (data.success ? 'Connected successfully' : 'Failed to connect'),
+          success: isSuccess,
+          message,
         },
       }));
 
       // Update provider lastTestedStatus
       onSaveProvider({
         ...provider,
-        lastTestedStatus: data.success ? 'success' : 'failed',
-        lastTestedError: data.success ? undefined : data.message,
+        lastTestedStatus: isSuccess ? 'success' : 'failed',
+        lastTestedError: isSuccess ? undefined : message,
       });
     } catch (err: any) {
       setTestResults((prev) => ({

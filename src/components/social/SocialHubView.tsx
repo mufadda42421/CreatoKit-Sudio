@@ -21,6 +21,7 @@ import {
   Play,
   Lock,
 } from 'lucide-react';
+import { safeFetchJson } from '../../lib/apiClient';
 
 interface SocialHubViewProps {
   accounts: SocialAccount[];
@@ -146,7 +147,14 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
     try {
       const hashtagsList = postHashtags.split(' ').map((h) => h.trim()).filter(Boolean);
 
-      const res = await fetch('/api/social/publish', {
+      const res = await safeFetchJson<{
+        jobId: string;
+        platform: SocialPlatform;
+        status: 'published' | 'scheduled';
+        platformPostUrl?: string;
+        message?: string;
+        error?: string;
+      }>('/api/social/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,10 +167,11 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Publishing failed.');
+      if (!res.ok || !res.data) {
+        throw new Error(res.error || res.data?.error || 'Publishing failed.');
       }
+
+      const data = res.data;
 
       const newJob: PublishingJob = {
         id: data.jobId,
@@ -180,7 +189,7 @@ export const SocialHubView: React.FC<SocialHubViewProps> = ({
       onSaveJob(newJob);
       setSubmitResult({
         success: true,
-        message: data.message,
+        message: data.message || 'Post submitted successfully.',
         url: data.platformPostUrl,
       });
 

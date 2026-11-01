@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AIProviderConfig, AIProviderType } from '../../types';
 import { Key, Shield, ExternalLink, X, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { safeFetchJson } from '../../lib/apiClient';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -27,9 +28,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      fetch('/api/ai/status')
-        .then((r) => r.json())
-        .then((d) => setHasServerKey(!!d.hasServerKey))
+      safeFetchJson<{ hasServerKey: boolean }>('/api/ai/status')
+        .then((res) => {
+          if (res.data) {
+            setHasServerKey(!!res.data.hasServerKey);
+          }
+        })
         .catch(() => setHasServerKey(true));
     }
   }, [isOpen]);
@@ -112,22 +116,27 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     const modelToUse = customModel.trim() || defaultModels[selectedType];
 
     try {
-      const res = await fetch('/api/ai/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedType,
-          apiKey: cleanKey,
-          baseUrl: selectedType === 'custom' ? baseUrl.trim() : undefined,
-          model: modelToUse,
-        }),
-      });
+      const res = await safeFetchJson<{ success: boolean; message: string; model?: string }>(
+        '/api/ai/test-connection',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: selectedType,
+            apiKey: cleanKey,
+            baseUrl: selectedType === 'custom' ? baseUrl.trim() : undefined,
+            model: modelToUse,
+          }),
+        }
+      );
 
-      const data = await res.json();
-      if (!data.success) {
+      const isSuccess = res.ok && res.data?.success;
+      const message = res.data?.message || res.error || (isSuccess ? 'Connected successfully' : 'Key verification failed.');
+
+      if (!isSuccess) {
         setTestResult({
           success: false,
-          message: data.message || 'Key verification failed. You can still click "Save Key Anyway" below.',
+          message: `${message} (You can still click "Save Key Without Test" below to use it anyway).`,
         });
         setIsTesting(false);
         return;
@@ -162,7 +171,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     } catch (err: any) {
       setTestResult({
         success: false,
-        message: err?.message || 'Connection test failed. You can save key directly.',
+        message: err?.message || 'Connection test failed. You can click "Save Key Without Test" below.',
       });
     } finally {
       setIsTesting(false);
